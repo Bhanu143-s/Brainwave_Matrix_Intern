@@ -1,22 +1,41 @@
-import streamlit as st
-import joblib
+import torch
+from diffusers import StableDiffusionPipeline
+import gradio as gr
+import os
 
-vectorizer = joblib.load("vectorizer.jb")
-model = joblib.load("lr_model.jb")
+# ── optional: keep cache off C: drive when you test locally ───────────
+# os.environ["HF_HOME"] = "E:/huggingface_cache"
 
-st.title("Fake News Detector")
-st.write("Enter a News Article below to check whether it is Fake or Real. ")
+# ── choose device ─────────────────────────────────────────────────────
+device = "cuda" if torch.cuda.is_available() else "cpu"
+dtype   = torch.float16 if device == "cuda" else torch.float32
 
-news_input = st.text_area("News Article:","")
+# ── load Stable Diffusion v1-5 (photorealistic) ───────────────────────
+pipe = StableDiffusionPipeline.from_pretrained(
+    "runwayml/stable-diffusion-v1-5",
+    torch_dtype=dtype
+)
+pipe = pipe.to(device)
 
-if st.button("Check News"):
-    if news_input.strip():
-        transform_input = vectorizer.transform([news_input])
-        prediction = model.predict(transform_input)
+# ── generation function ───────────────────────────────────────────────
+def generate(prompt: str):
+    # quick safety-guard for empty prompts
+    if not prompt or prompt.isspace():
+        return None
+    # run inference
+    image = pipe(prompt, guidance_scale=7.5, num_inference_steps=30).images[0]
+    return image
 
-        if prediction[0]==1:
-            st.success("The News is Real! ")
-        else:
-            st.error("The News is Fake! ")
-    else:
-        st.warning("Please enter some text to analyze. ")            
+# ── Gradio UI ─────────────────────────────────────────────────────────
+demo = gr.Interface(
+    fn=generate,
+    inputs=gr.Textbox(label="Enter your prompt",
+                      placeholder="e.g. a photorealistic lion in the jungle at sunset"),
+    outputs=gr.Image(type="pil"),
+    title="Stable Bud – Text → Photorealistic Image",
+    description=("Powered by Stable Diffusion v1.5 – switch your Space to a GPU (T4) "
+                 "for images in ~10 s.  CPU fallback works but is slow.")
+)
+
+# ── launch ────────────────────────────────────────────────────────────
+demo.launch()

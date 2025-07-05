@@ -1,4 +1,6 @@
-streamlit
-scikit-learn
-pandas
-joblib
+torch
+transformers
+diffusers
+accelerate
+safetensors
+gradio
